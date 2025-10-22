@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Solicitud de Crédito</title>
+    <!-- Tailwind CSS para un diseño moderno y adaptable -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <style>
+        /* Usamos la fuente Inter como base */
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Pequeña transición para los elementos que aparecen/desaparecen */
+        .transition-all {
+            transition: all 0.3s ease-in-out;
+        }
+        .hidden-scale {
+            transform: scale(0.95);
+            opacity: 0;
+            visibility: hidden;
+            height: 0;
+            position: absolute; /* Para evitar que ocupe espacio */
+        }
+        .visible-scale {
+            transform: scale(1);
+            opacity: 1;
+            visibility: visible;
+            height: auto;
+            position: relative; /* Para que fluya normalmente */
+        }
+
+        /* --- Spinner de Carga Elegante --- */
+        .loader-spinner {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            /* Usamos tu azul oscuro como base del spinner */
+            border: 6px solid #001749; 
+             /* Usamos tu azul brillante como la parte que gira */
+            border-top-color: #3787c6;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+    <script>
+        // Función para obtener parámetros de la URL
+        function getUrlParameter(name) {
+            name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+            var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+            var results = regex.exec(location.search);
+            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+        }
+    </script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <!-- --- Overlay de Carga Full-screen --- -->
+    <div id="loader-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="loader-spinner"></div>
+    </div>
+
+    <!-- --- Modal de Error --- -->
+    <div id="error-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-6 text-center">
+            <!-- Ícono de Error -->
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100">
+                <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+            <h3 class="text-xl font-bold text-gray-800 mt-4">Error de Verificación</h3>
+            <p id="error-modal-message" class="text-gray-600 mt-2 text-sm mb-6">Lo sentimos, al parecer no tienes acceso a esta aplicación.</p>
+            <button id="modal-close-btn" class="w-full bg-[#e48410] hover:bg-[#d0760e] text-white font-bold py-2 px-4 rounded-lg transition-all">
+                Entendido
+            </button>
+        </div>
+    </div>
+
+    <!-- --- Modal de Confirmación de Detalles --- -->
+    <div id="details-confirmation-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-lg p-6">
+            <h3 class="text-xl font-bold text-gray-800 mb-4">Confirmar Detalles</h3>
+            <div class="bg-gray-50 p-4 rounded-lg mb-4">
+                <div class="space-y-2">
+                    <p><strong>Decisión:</strong> <span id="modal-decision" class="font-semibold"></span></p>
+                    <p><strong>Detalles:</strong></p>
+                    <p id="modal-details" class="text-gray-600 whitespace-pre-line"></p>
+                </div>
+            </div>
+            <div class="flex gap-3">
+                <button id="confirm-details-btn" class="flex-1 bg-[#015cd0] hover:bg-[#004ab3] text-white font-bold py-3 px-4 rounded-lg transition-all">
+                    Confirmar y Enviar
+                </button>
+                <button id="edit-details-btn" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 px-4 rounded-lg transition-all">
+                    Editar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- --- Modal de Estado de Envío --- -->
+    <div id="email-status-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-6 text-center">
+            <div id="email-status-icon" class="mx-auto flex items-center justify-center h-12 w-12 rounded-full">
+                <!-- El ícono se insertará dinámicamente -->
+            </div>
+            <h3 id="email-status-title" class="text-xl font-bold text-gray-800 mt-4"></h3>
+            <p id="email-status-message" class="text-gray-600 mt-2 mb-6"></p>
+            <div class="flex gap-3">
+                <button id="retry-email-btn" class="flex-1 bg-[#015cd0] hover:bg-[#004ab3] text-white font-bold py-3 px-4 rounded-lg transition-all hidden">
+                    Reintentar
+                </button>
+                <button id="finish-process-btn" class="flex-1 bg-[#e48410] hover:bg-[#d0760e] text-white font-bold py-3 px-4 rounded-lg transition-all hidden">
+                    Finalizar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- --- Modal de Confirmación de Contenido --- -->
+    <div id="content-confirmation-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 hidden p-4">
+        <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-6 text-center">
+            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
+                <svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+            </div>
+            <h3 class="text-xl font-bold text-gray-800 mt-4">Confirmar Envío</h3>
+            <p class="text-gray-600 mt-2 mb-6">¿Estás seguro de que deseas enviar este mensaje?</p>
+            <div class="flex gap-3">
+                <button id="confirm-content-btn" class="flex-1 bg-[#015cd0] hover:bg-[#004ab3] text-white font-bold py-3 px-4 rounded-lg transition-all">
+                    Confirmar
+                </button>
+                <button id="edit-content-btn" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 px-4 rounded-lg transition-all">
+                    Editar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Contenedor principal para las tarjetas -->
+    <div class="w-full max-w-md mx-auto">
+        <!-- Tarjeta de Login (Visible por defecto) -->
+        <div id="login-card" class="bg-white rounded-xl shadow-lg overflow-hidden transition-all visible-scale">
+            <div class="p-6 md:p-8">
+                <div class="flex justify-center mb-6">
+                    <img src="https://i.postimg.cc/zBPmbxNT/TRANSPARENTE-min.png" alt="Logo de la Empresa" class="h-20 w-auto">
+                </div>
+                <h1 class="text-2xl font-bold text-gray-800 text-center mb-2">Verificar Identidad</h1>
+                <p class="text-gray-500 text-center mb-6">Ingresa tu WhatsApp para continuar.</p>
+                
+                <form id="login-form" class="space-y-4">
+                    <div>
+                        <label for="whatsapp-input" class="text-sm font-medium text-gray-500">Número de WhatsApp</label>
+                        <input type="tel" id="whatsapp-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all mt-1" placeholder="Ej: 51987654321" required>
+                    </div>
+                    <button type="submit" id="login-button" class="w-full bg-[#015cd0] hover:bg-[#004ab3] text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center">
+                        Continuar
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Tarjeta de Verificación OTP (Oculta) -->
+        <div id="otp-card" class="bg-white rounded-xl shadow-lg overflow-hidden transition-all hidden-scale">
+            <div class="p-6 md:p-8">
+                <div class="flex justify-center mb-6">
+                    <img src="https://i.postimg.cc/zBPmbxNT/TRANSPARENTE-min.png" alt="Logo de la Empresa" class="h-20 w-auto">
+                </div>
+                <h1 class="text-2xl font-bold text-gray-800 text-center mb-2">Verificar Código</h1>
+                <p class="text-gray-500 text-center mb-6">Ingresa el código de 6 dígitos que enviamos a tu WhatsApp.</p>
+                
+                <form id="otp-form" class="space-y-4">
+                    <div>
+                        <label for="otp-verify-input" class="text-sm font-medium text-gray-500">Código OTP</label>
+                        <input type="text" id="otp-verify-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all mt-1" placeholder="Ingresa el código" required maxlength="6" oninput="this.value = this.value.toUpperCase()" autocapitalize="characters">
+                    </div>
+                    <button type="submit" id="otp-verify-button" class="w-full bg-[#015cd0] hover:bg-[#004ab3] text-white font-bold py-3 px-4 rounded-lg transition-all flex items-center justify-center">
+                        Verificar
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Tarjeta principal con la información (Oculta) -->
+        <div id="request-card" class="bg-white rounded-xl shadow-lg overflow-hidden transition-all hidden-scale">
+            <div class="p-6 md:p-8">
+                <div class="flex justify-center mb-6">
+                    <img src="https://i.postimg.cc/zBPmbxNT/TRANSPARENTE-min.png" alt="Logo de la Empresa" class="h-20 w-auto">
+                </div>
+                
+                <!-- Ficha de Usuario Verificado -->
+                <div class="bg-indigo-50 p-4 rounded-lg border border-indigo-100 mb-6">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-indigo-800 font-semibold">Usuario Verificado</h3>
+                        <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">Verificado</span>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <span class="text-sm font-medium text-indigo-600">Nombre</span>
+                            <p id="user-name" class="text-lg font-semibold text-gray-900"></p>
+                        </div>
+                        <div>
+                            <span class="text-sm font-medium text-indigo-600">Cédula</span>
+                            <p id="user-cedula" class="text-lg font-semibold text-gray-900"></p>
+                        </div>
+                    </div>
+                </div>
+                
+                <h1 class="text-2xl font-bold text-gray-800 text-center mb-2">Nueva Solicitud de Crédito</h1>
+                <p class="text-gray-500 text-center mb-6">Se han registrado los siguientes detalles:</p>
+                
+                <div class="space-y-6 text-left">
+                    <!-- Datos del Solicitante -->
+                    <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                        <h3 class="text-blue-800 font-semibold mb-3">Datos del Solicitante</h3>
+                        <div class="space-y-3">
+                            <div>
+                                <span class="text-sm font-medium text-blue-600">Nombre del Socio</span>
+                                <p id="nombre-socio" class="text-lg font-semibold text-gray-900"></p>
+                            </div>
+                            <div>
+                                <span class="text-sm font-medium text-blue-600">Cédula del Socio</span>
+                                <p id="cedula-socio" class="text-lg font-semibold text-gray-900"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Detalles del Crédito -->
+                    <div class="bg-green-50 p-4 rounded-lg border border-green-100">
+                        <h3 class="text-green-800 font-semibold mb-3">Detalles del Crédito</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <span class="text-sm font-medium text-green-600">Monto del Crédito</span>
+                                <p id="monto-credito" class="text-lg font-bold text-gray-900"></p>
+                                <p id="monto-texto" class="text-sm text-gray-600 italic"></p>
+                            </div>
+                            <div>
+                                <span class="text-sm font-medium text-green-600">Tasa de Interés</span>
+                                <p id="tasa-interes" class="text-lg font-bold text-gray-900"></p>
+                                <p id="tasa-texto" class="text-sm text-gray-600 italic"></p>
+                            </div>
+                            <div>
+                                <span class="text-sm font-medium text-green-600">Plazo</span>
+                                <p id="plazo" class="text-lg font-bold text-gray-900"></p>
+                                <p id="plazo-texto" class="text-sm text-gray-600 italic"></p>
+                            </div>
+                            <div>
+                                <span class="text-sm font-medium text-green-600">Tipo de Crédito</span>
+                                <p id="tipo-credito" class="text-lg font-semibold text-gray-900"></p>
+                            </div>
+                            <div class="md:col-span-2">
+                                <span class="text-sm font-medium text-green-600">Destino del Crédito</span>
+                                <p id="destino-credito" class="text-lg font-semibold text-gray-900"></p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Información Adicional -->
+                    <div class="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <div>
+                            <span class="text-sm font-medium text-gray-500">Asesor</span>
+                            <p id="asesor" class="text-lg font-semibold text-gray-900"></p>
+                        </div>
+                    </div>
+
+                    <!-- Campo oculto para ID Comité -->
+                    <div class="hidden">
+                        <p id="id-comite"></p>
+                    </div>
+                </div>
+
+                <div id="action-buttons" class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-8">
+                    <button data-action="approve" class="action-btn w-full bg-[#3787c6] hover:bg-[#2f73a8] text-white font-bold py-3 px-4 rounded-lg transition-all">Aprobar</button>
+                    <button data-action="deny" class="action-btn w-full bg-[#e48410] hover:bg-[#d0760e] text-white font-bold py-3 px-4 rounded-lg transition-all">Negar</button>
+                    <button data-action="review" class="action-btn w-full bg-[#001749] hover:bg-[#000f33] text-white font-bold py-3 px-4 rounded-lg transition-all">Revisar</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sección para añadir detalles (Oculta) -->
+        <div id="details-section" class="bg-white rounded-xl shadow-lg overflow-hidden mt-6 transition-all hidden-scale">
+            <div class="p-6 md:p-8">
+                <h2 id="details-title" class="text-xl font-bold text-gray-800 mb-4">Escribir Detalles</h2>
+                <form id="details-form" class="space-y-4">
+                    <div>
+                        <label for="details-textarea" class="block text-sm font-medium text-gray-700 mb-1">
+                            Detalles de la decisión <span class="text-red-600">*</span>
+                        </label>
+                        <textarea 
+                            id="details-textarea" 
+                            rows="4" 
+                            required
+                            style="text-transform: uppercase;"
+                            class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                            placeholder="Por favor, explica los motivos de tu decisión..."
+                            oninput="this.value = this.value.toUpperCase()"
+                        ></textarea>
+                        <p class="mt-1 text-sm text-gray-500">
+                            Este campo es obligatorio. Por favor, proporciona detalles que justifiquen tu decisión.
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button 
+                            type="submit" 
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            id="submit-decision-btn"
+                        >
+                            <span class="flex items-center justify-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                </svg>
+                                Enviar Correo Electrónico
+                            </span>
+                        </button>
+                        <button 
+                            type="button" 
+                            id="cancel-btn" 
+                            class="w-full bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-3 px-4 rounded-lg transition-all"
+                        >
+                            Cancelar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Mensaje de confirmación (Oculto) -->
+        <div id="confirmation-message" class="bg-white rounded-xl shadow-lg p-8 mt-6 text-center transition-all hidden-scale">
+             <div id="confirmation-icon-container">
+                <!-- El ícono dinámico aparecerá aquí -->
+             </div>
+            <h2 id="confirmation-title" class="text-xl font-bold text-gray-800 mt-4"></h2>
+            <p id="confirmation-text" class="text-gray-600 mt-2"></p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Selectores Globales ---
+            const loaderOverlay = document.getElementById('loader-overlay');
+            const errorModal = document.getElementById('error-modal');
+            const errorModalMessage = document.getElementById('error-modal-message');
+            const modalCloseBtn = document.getElementById('modal-close-btn');
+            const contentConfirmationModal = document.getElementById('content-confirmation-modal');
+            const confirmContentBtn = document.getElementById('confirm-content-btn');
+            const editContentBtn = document.getElementById('edit-content-btn');
+
+            // --- Selectores Login ---
+            const loginCard = document.getElementById('login-card');
+            const loginForm = document.getElementById('login-form');
+            const whatsappInput = document.getElementById('whatsapp-input');
+            const loginButton = document.getElementById('login-button');
+
+            // --- Selectores OTP ---
+            const otpCard = document.getElementById('otp-card');
+            const otpForm = document.getElementById('otp-form');
+            const otpVerifyInput = document.getElementById('otp-verify-input');
+            const otpVerifyButton = document.getElementById('otp-verify-button');
+            
+            // --- Selectores Solicitud ---
+            const actionButtons = document.querySelectorAll('.action-btn');
+            const detailsSection = document.getElementById('details-section');
+            const detailsTitle = document.getElementById('details-title');
+            const detailsForm = document.getElementById('details-form');
+            const detailsTextarea = document.getElementById('details-textarea');
+            const cancelBtn = document.getElementById('cancel-btn');
+            const requestCard = document.getElementById('request-card');
+            const confirmationMessage = document.getElementById('confirmation-message');
+            const confirmationIconContainer = document.getElementById('confirmation-icon-container');
+            const confirmationTitle = document.getElementById('confirmation-title');
+            const confirmationText = document.getElementById('confirmation-text');
+            
+            // --- Variables de Estado ---
+            let selectedAction = '';
+            let generatedOTP = ''; // Almacenará el OTP generado
+            let serverOTP = ''; // Almacenará el OTP recibido del servidor
+
+            // --- Función para mostrar el modal de error ---
+            const showErrorModal = (message) => {
+                errorModalMessage.innerHTML = message;
+                errorModal.classList.remove('hidden');
+            };
+
+            // --- Event listener para cerrar el modal ---
+            modalCloseBtn.addEventListener('click', () => {
+                errorModal.classList.add('hidden');
+            });
+
+            // --- Función para generar OTP ---
+            const generateOTP = () => {
+                // Letras y números claros
+                const letters = 'ACDEFHJKLMNPRTUVWXY';
+                const numbers = '34679';
+                const allChars = letters + numbers;
+                let otpArr = [];
+
+                // Garantizar al menos 2 letras y 2 números
+                for (let i = 0; i < 2; i++) {
+                    otpArr.push(letters.charAt(Math.floor(Math.random() * letters.length)));
+                    otpArr.push(numbers.charAt(Math.floor(Math.random() * numbers.length)));
+                }
+                // Completar el resto con caracteres claros
+                while (otpArr.length < 6) {
+                    otpArr.push(allChars.charAt(Math.floor(Math.random() * allChars.length)));
+                }
+                // Mezclar el arreglo para aleatoriedad
+                for (let i = otpArr.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [otpArr[i], otpArr[j]] = [otpArr[j], otpArr[i]];
+                }
+                return otpArr.join('');
+            };
+
+            // --- Lógica del Login (Paso 1) ---
+            loginForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                loginButton.disabled = true;
+                loginButton.innerHTML = 'Verificando...';
+                loaderOverlay.classList.remove('hidden');
+
+                const whatsappNumber = whatsappInput.value;
+                generatedOTP = generateOTP();
+                const idcomite = getUrlParameter('IDCOMITE');
+                const webhookUrl = 'https://lpwebhook.luispinta.com/webhook/9737272e-c9b0-4269-9d46-3bc784e51e2a';
+
+                try {
+                    const response = await fetch(webhookUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ whatsapp: whatsappNumber, otp: generatedOTP, idcomite: idcomite })
+                    });
+
+                    const responseText = await response.text();
+
+                    // Parsear la respuesta
+                    const lines = responseText.split('\n');
+                    const estado = lines[0].split(': ')[1];
+                    const nombre = lines[1].split(': ')[1];
+                    const cedula = lines[2].split(': ')[1];
+                    
+                    // Guardar el OTP generado en el almacenamiento de sesión
+                    sessionStorage.setItem('currentOTP', generatedOTP);
+
+                    if (response.ok && estado.trim() === 'Existe') {
+                        // Almacenar los datos del usuario para usarlos después
+                        window.userData = {
+                            nombre: nombre,
+                            cedula: cedula
+                        };
+
+                        // Éxito: Ocultar login, mostrar tarjeta de OTP
+                        loginCard.classList.remove('visible-scale');
+                        loginCard.classList.add('hidden-scale');
+                        otpCard.classList.remove('hidden-scale');
+                        otpCard.classList.add('visible-scale');
+                        otpVerifyInput.focus();
+                    } else if (response.ok && estado.trim() === 'No_existe') {
+                        throw new Error('Lo sentimos, al parecer no eres parte del sistema.');
+                    } else {
+                        throw new Error('Lo sentimos, ocurrió un error al verificar tu acceso.');
+                    }
+                } catch (error) {
+                    // console.error('Error completo en webhook:', error);
+                    const errorMessage = error.message.includes('Lo sentimos') 
+                        ? error.message 
+                        : 'Lo sentimos, no pudimos validar tu acceso. Por favor, revisa que tu número de WhatsApp sea correcto e inténtalo de nuevo, asegurándote de incluir el código de país.<br>Ejemplo: si tu número es 9175551545, debes poner <strong>1</strong>9175551545.';
+                    
+                    showErrorModal(errorMessage);
+                    
+                    // Restaurar el botón solo en caso de error
+                    loginButton.disabled = false;
+                    loginButton.innerHTML = 'Continuar';
+                } finally {
+                    loaderOverlay.classList.add('hidden');
+                }
+            });
+
+            // --- Lógica de Verificación de OTP (Paso 2) ---
+            otpForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const enteredOTP = otpVerifyInput.value.trim().toUpperCase();
+
+                // Verificar el OTP ingresado
+                if (enteredOTP === generatedOTP) {
+                    // Mostrar loader mientras se procesa
+                    loaderOverlay.classList.remove('hidden');
+                    
+                    // Usar los datos del usuario almacenados previamente
+                    const userInfo = window.userData || {
+                        nombre: '-',
+                        cedula: '-'
+                    };
+                    
+                    // Actualizar la información del usuario verificado
+                    document.getElementById('user-name').textContent = userInfo.nombre;
+                    document.getElementById('user-cedula').textContent = userInfo.cedula;
+                    
+                    // Llamar al segundo webhook para registrar el acceso exitoso
+                    const secondWebhookUrl = 'https://lpwebhook.luispinta.com/webhook/b876e122-b809-49ec-86be-4118547386b8';
+                    const idcomite = getUrlParameter('IDCOMITE');
+                    
+                    try {
+                        const response = await fetch(secondWebhookUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ 
+                                idcomite: idcomite,
+                                whatsapp: whatsappInput.value,
+                                otp: generatedOTP
+                            })
+                        });
+                        
+                        const responseText = await response.text();
+                        // console.log('Respuesta del webhook IDCOMITE:', {
+                        //     status: response.status,
+                        //     responseText: responseText
+                        // });
+                        
+                        let data;
+                        try {
+                            // Intentar parsear como JSON primero
+                            data = JSON.parse(responseText);
+                            if (Array.isArray(data)) {
+                                data = data[0];
+                            }
+                        } catch (e) {
+                            // Si no es JSON, tratarlo como texto con formato de líneas
+                            const responseLines = responseText.split('\n');
+                            data = {
+                                id_comite: idcomite,
+                                nombre_socio: responseLines[1]?.split(': ')[1] || '-',
+                                cedula_socio: responseLines[2]?.split(': ')[1] || '-',
+                                monto_credito: '-',
+                                monto_en_texto: '-',
+                                tasa_interes: '-',
+                                tasa_en_texto: '-',
+                                plazo: '-',
+                                plazo_texto: '-',
+                                tipo_credito: '-',
+                                destino_credito: '-',
+                                asesor: '-'
+                            };
+                            
+                            // Solo verificar estado si no es JSON
+                            const estado = responseLines[0]?.split(': ')[1]?.trim();
+                            if (estado && estado !== 'Existe') {
+                                throw new Error('Usuario no encontrado o sin acceso');
+                            }
+                        }
+                        
+                        // Llenar los campos con la información recibida
+                        document.getElementById('id-comite').textContent = data.id_comite || '-';
+                        document.getElementById('nombre-socio').textContent = data.nombre_socio || '-';
+                        document.getElementById('cedula-socio').textContent = data.cedula_socio || '-';
+                        document.getElementById('monto-credito').textContent = data.monto_credito ? `$${data.monto_credito}` : '-';
+                        document.getElementById('monto-texto').textContent = data.monto_en_texto || '-';
+                        document.getElementById('tasa-interes').textContent = data.tasa_interes ? `${data.tasa_interes}%` : '-';
+                        document.getElementById('tasa-texto').textContent = data.tasa_en_texto || '-';
+                        document.getElementById('plazo').textContent = data.plazo ? `${data.plazo} meses` : '-';
+                        document.getElementById('plazo-texto').textContent = data.plazo_en_texto || '-';
+                        document.getElementById('tipo-credito').textContent = data.tipo_credito || '-';
+                        document.getElementById('destino-credito').textContent = data.destino_credito || '-';
+                        document.getElementById('asesor').textContent = data.asesor || '-';
+                        
+                        // Éxito: Ocultar tarjeta OTP, mostrar tarjeta de solicitud
+                        otpCard.classList.remove('visible-scale');
+                        otpCard.classList.add('hidden-scale');
+                        requestCard.classList.remove('hidden-scale');
+                        requestCard.classList.add('visible-scale');
+                    } catch (error) {
+                        console.error('Error al registrar acceso:', error);
+                        showErrorModal('Hubo un error al procesar tu acceso. Por favor, intenta nuevamente.');
+                    } finally {
+                        loaderOverlay.classList.add('hidden');
+                    }
+                } else {
+                    // Error: OTP incorrecto
+                    showErrorModal('Código incorrecto. Inténtalo de nuevo.');
+                    otpVerifyInput.focus();
+                }
+            });
+
+            // --- Lógica de la Solicitud (La parte de tu captura) ---
+            const actionDetails = {
+                approve: { title: 'Detalles de Aprobación', respuestaRapida: 'APROBADO' },
+                deny: { title: 'Motivos de Negación', respuestaRapida: 'NEGADO' },
+                review: { title: 'Comentarios para Revisión', respuestaRapida: 'EN REVISIÓN' }
+            };
+
+            const showDetailsSection = (action) => {
+                selectedAction = action;
+                detailsTitle.textContent = actionDetails[action].title;
+                detailsSection.classList.remove('hidden-scale');
+                detailsSection.classList.add('visible-scale');
+                detailsTextarea.value = ''; // Limpiar el textarea
+                submitDecisionBtn.disabled = true; // El botón inicia deshabilitado
+                detailsTextarea.focus();
+            };
+
+            const hideDetailsSection = () => {
+                detailsSection.classList.remove('visible-scale');
+                detailsSection.classList.add('hidden-scale');
+                detailsTextarea.value = '';
+                selectedAction = '';
+            };
+
+            // Referencia al botón de enviar
+            const submitDecisionBtn = document.getElementById('submit-decision-btn');
+            
+            // Validar el contenido del textarea y convertir a mayúsculas
+            detailsTextarea.addEventListener('input', (e) => {
+                // Convertir a mayúsculas
+                e.target.value = e.target.value.toUpperCase();
+                
+                const value = e.target.value.trim();
+                submitDecisionBtn.disabled = value.length < 10; // Requerir al menos 10 caracteres
+            });
+
+            const formatDateToSpanish = (date) => {
+                const months = [
+                    'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                    'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+                ];
+                
+                const day = date.getDate();
+                const month = months[date.getMonth()];
+                const year = date.getFullYear();
+                
+                return `${day} del mes de ${month}`;
+            };
+
+            const numberToWords = (num) => {
+                const units = ['', 'una', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez', 'once', 'doce'];
+                if (num < 13) return units[num];
+                return num.toString();
+            };
+
+            const formatTimeToWords = (date) => {
+                const hours = date.getHours();
+                const minutes = date.getMinutes();
+                const period = hours >= 12 ? 'pm' : 'am';
+                const hour12 = hours % 12 || 12;
+                
+                return `${numberToWords(hour12)} horas con ${numberToWords(minutes)} minutos ${period}`;
+            };
+
+            const sendDecisionToWebhook = async (action, detalle) => {
+                const webhookUrl = 'https://lpwebhook.luispinta.com/webhook/93a4e85c-98c7-4013-9226-9b735658dfe2';
+                const idcomite = document.getElementById('id-comite').textContent;
+                const userInfo = window.userData || { nombre: '-', cedula: '-' };
+                
+                try {
+                    loaderOverlay.classList.remove('hidden');
+                    const response = await fetch(webhookUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            idcomite: idcomite,
+                            respuestaRapida: actionDetails[action].respuestaRapida,
+                            detalle: detalle,
+                            whatsapp: whatsappInput.value,
+                            otp: generatedOTP,
+                            nombreUsuario: userInfo.nombre,
+                            respuestaBoton: action
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Error al enviar la decisión');
+                    }
+                } catch (error) {
+                    // console.error('Error:', error);
+                    showErrorModal('Hubo un error al procesar tu decisión. Por favor, intenta nuevamente.');
+                } finally {
+                    loaderOverlay.classList.add('hidden');
+                }
+            };
+            
+            const updateConfirmationMessage = (action) => {
+                let iconHtml = '', title = '', text = '';
+                switch (action) {
+                    case 'approve':
+                        iconHtml = `<div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100"><svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>`;
+                        title = 'Solicitud Aprobada';
+                        text = 'La aprobación ha sido registrada y notificada.';
+                        break;
+                    case 'deny':
+                        iconHtml = `<div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100"><svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></div>`;
+                        title = 'Solicitud Negada';
+                        text = 'La negación ha sido registrada correctamente.';
+                        break;
+                    case 'review':
+                        iconHtml = `<div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100"><svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>`;
+                        title = 'Enviado a Revisión';
+                        text = 'La solicitud se ha marcado para una revisión adicional.';
+                        break;
+                }
+                confirmationIconContainer.innerHTML = iconHtml;
+                confirmationTitle.textContent = title;
+                confirmationText.textContent = text;
+            };
+
+            actionButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const action = button.dataset.action;
+                    showDetailsSection(action);
+                });
+            });
+
+            cancelBtn.addEventListener('click', () => {
+                hideDetailsSection();
+            });
+
+            // Evento para editar el contenido
+            editContentBtn.addEventListener('click', () => {
+                contentConfirmationModal.classList.add('hidden');
+                detailsTextarea.focus();
+            });
+
+            // Eliminada la sección duplicada del evento submit para evitar doble modal
+
+            // Cuando se confirma el envío desde el modal
+            confirmContentBtn.addEventListener('click', async () => {
+                contentConfirmationModal.classList.add('hidden');
+                const details = detailsTextarea.value.trim();
+
+                try {
+                    // Enviar la decisión al webhook en segundo plano
+                    await sendDecisionToWebhook(selectedAction, details);
+                    
+                    // Obtener la fecha y hora actual en la zona horaria de Nueva York
+                    const nyDate = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+                    const date = new Date(nyDate);
+                    
+                    // Obtener los datos necesarios
+                    const userInfo = window.userData || { nombre: '-', cedula: '-' };
+                    const nombreSocio = document.getElementById('nombre-socio').textContent;
+                    const montoCred = document.getElementById('monto-credito').textContent;
+                    const montoTexto = document.getElementById('monto-texto').textContent;
+                    const tasaInt = document.getElementById('tasa-interes').textContent;
+                    const tasaTexto = document.getElementById('tasa-texto').textContent;
+                    const plazoMeses = document.getElementById('plazo').textContent;
+                    const plazoTexto = document.getElementById('plazo-texto').textContent;
+                    const tipoCredito = document.getElementById('tipo-credito').textContent;
+                    const destinoCredito = document.getElementById('destino-credito').textContent;
+                    const idcomite = document.getElementById('id-comite').textContent;
+
+                    // Construir el asunto del correo
+                    const subject = `Respuesta al Comité del ${formatDateToSpanish(date)} de ${nombreSocio}`;
+
+                    // Construir el cuerpo del correo (agregando ID Comité y cambios de texto)
+                    const body = `Estimado señor gerente Luis Pinta,
+
+Por medio del presente correo, yo ${userInfo.nombre} con cédula ${userInfo.cedula} certifico que he participado en el comité de crédito que ha iniciado la toma de decisiones y veredictos el ${formatDateToSpanish(date)} a las ${formatTimeToWords(date)}.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DETALLES DEL CRÉDITO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ID Comité: ${idcomite}
+Solicitante: ${nombreSocio}
+Monto: ${montoCred} (${montoTexto})
+Tasa de Interés: ${tasaInt} (${tasaTexto})
+Plazo: ${plazoMeses} (${plazoTexto})
+Tipo de Crédito: ${tipoCredito}
+Destino del Crédito: ${destinoCredito}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MI DECISIÓN: ${actionDetails[selectedAction].respuestaRapida}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Detalles adicionales de mi decisión:
+${details}
+
+Atentamente,
+${userInfo.nombre}
+Miembro del Comité de Crédito`;
+
+                    // Construir la URL del mailto
+                    const mailtoUrl = `mailto:contacto@tupakrantina.com?cc=gerencia@tupakrantina.com&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                    
+                    // Abrir la aplicación de correo
+                    window.location.href = mailtoUrl;
+
+                    // Actualizar la interfaz
+                    updateConfirmationMessage(selectedAction);
+                    hideDetailsSection();
+                    requestCard.classList.add('hidden-scale');
+                    confirmationMessage.classList.remove('hidden-scale');
+                    confirmationMessage.classList.add('visible-scale');
+                } catch (error) {
+                    // console.error('Error al procesar la decisión:', error);
+                    showErrorModal('Hubo un error al procesar tu decisión. Por favor, intenta nuevamente.');
+                }
+            });
+
+            // Lógica para obtener datos de la URL (ejemplo)
+            const urlParams = new URLSearchParams(window.location.search);
+            const nombre = urlParams.get('nombre');
+            const motivo = urlParams.get('motivo');
+            const monto = urlParams.get('monto');
+
+            if (nombre) document.getElementById('applicant-name').textContent = nombre;
+            if (motivo) document.getElementById('request-reason').textContent = motivo;
+            if (monto) {
+                const formattedAmount = new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: 'USD'
+                }).format(monto);
+                document.getElementById('request-amount').textContent = formattedAmount;
+            }
+
+            // --- Gestión de Modales de Confirmación y Estado ---
+            const detailsConfirmationModal = document.getElementById('details-confirmation-modal');
+            const modalDecision = document.getElementById('modal-decision');
+            const modalDetails = document.getElementById('modal-details');
+            const confirmDetailsBtn = document.getElementById('confirm-details-btn');
+            const editDetailsBtn = document.getElementById('edit-details-btn');
+            const emailStatusModal = document.getElementById('email-status-modal');
+            const emailStatusIcon = document.getElementById('email-status-icon');
+            const emailStatusTitle = document.getElementById('email-status-title');
+            const emailStatusMessage = document.getElementById('email-status-message');
+            const retryEmailBtn = document.getElementById('retry-email-btn');
+            const finishProcessBtn = document.getElementById('finish-process-btn');
+
+            // Función para mostrar el modal de confirmación de detalles
+            const showDetailsConfirmationModal = (action, details) => {
+                modalDecision.textContent = actionDetails[action].respuestaRapida;
+                modalDetails.textContent = details;
+                detailsConfirmationModal.classList.remove('hidden');
+            };
+
+            // Variable para controlar si ya se finalizó el proceso
+            let isProcessFinished = false;
+
+            // Función para mostrar el modal de estado del correo
+            const showEmailStatusModal = (success, message) => {
+                if (isProcessFinished) {
+                    // Si ya se finalizó el proceso, mostrar mensaje de que ya no se pueden hacer cambios
+                    const noChangesModal = document.createElement('div');
+                    noChangesModal.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50';
+                    noChangesModal.innerHTML = `
+                        <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-6 text-center">
+                            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
+                                <svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-xl font-bold text-gray-800 mt-4">Proceso Finalizado</h3>
+                            <p class="text-gray-600 mt-2 mb-6">Este crédito ya ha sido procesado y no se pueden realizar más cambios.</p>
+                            <button class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-all" onclick="this.parentElement.parentElement.remove()">
+                                Entendido
+                            </button>
+                        </div>
+                    `;
+                    document.body.appendChild(noChangesModal);
+                    return;
+                }
+
+                emailStatusIcon.innerHTML = success ? 
+                    '<div class="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center"><svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>' :
+                    '<div class="h-12 w-12 rounded-full bg-red-100 flex items-center justify-center"><svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></div>';
+                
+                emailStatusTitle.textContent = success ? '¡Correo Enviado!' : 'Error al Enviar';
+                emailStatusMessage.textContent = message;
+                retryEmailBtn.classList.toggle('hidden', success);
+                finishProcessBtn.classList.toggle('hidden', !success);
+                emailStatusModal.classList.remove('hidden');
+            };
+
+            // Evento submit del formulario solo mostrará el modal de detalles
+            detailsForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const details = detailsTextarea.value.trim();
+
+                if (details.length < 10) {
+                    showErrorModal('Por favor, proporciona más detalles sobre tu decisión (mínimo 10 caracteres).');
+                    detailsTextarea.focus();
+                    return;
+                }
+
+                // Mostrar modal de confirmación de detalles
+                showDetailsConfirmationModal(selectedAction, details);
+            });
+
+            // Evento para confirmar y enviar el correo
+            confirmDetailsBtn.addEventListener('click', async () => {
+                detailsConfirmationModal.classList.add('hidden');
+                const details = modalDetails.textContent;
+
+                try {
+                    // Enviar la decisión al webhook en segundo plano
+                    await sendDecisionToWebhook(selectedAction, details);
+                    
+                    // Obtener la fecha y hora actual en la zona horaria de Nueva York
+                    const nyDate = new Date().toLocaleString('en-US', { timeZone: 'America/New_York' });
+                    const date = new Date(nyDate);
+                    
+                    // Obtener los datos necesarios
+                    const userInfo = window.userData || { nombre: '-', cedula: '-' };
+                    const nombreSocio = document.getElementById('nombre-socio').textContent;
+                    const montoCred = document.getElementById('monto-credito').textContent;
+                    const montoTexto = document.getElementById('monto-texto').textContent;
+                    const tasaInt = document.getElementById('tasa-interes').textContent;
+                    const tasaTexto = document.getElementById('tasa-texto').textContent;
+                    const plazoMeses = document.getElementById('plazo').textContent;
+                    const plazoTexto = document.getElementById('plazo-texto').textContent;
+                    const tipoCredito = document.getElementById('tipo-credito').textContent;
+                    const destinoCredito = document.getElementById('destino-credito').textContent;
+
+                    // Construir el asunto del correo
+                    const subject = `Respuesta al Comité del ${formatDateToSpanish(date)} de ${nombreSocio}`;
+
+                    // Construir el cuerpo del correo (solo mensaje modificado)
+                    const idcomite = document.getElementById('id-comite').textContent;
+                    const body = `Estimado señor gerente Luis Pinta,
+
+Por medio del presente correo, yo ${userInfo.nombre} con cédula ${userInfo.cedula} certifico que he participado en el comité de crédito que ha iniciado la toma de decisiones y veredictos el ${formatDateToSpanish(date)} a las ${formatTimeToWords(date)}.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DETALLES DEL CRÉDITO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ID Comité: ${idcomite}
+Solicitante: ${nombreSocio}
+Monto: ${montoCred} (${montoTexto})
+Tasa de Interés: ${tasaInt} (${tasaTexto})
+Plazo: ${plazoMeses} (${plazoTexto})
+Tipo de Crédito: ${tipoCredito}
+Destino del Crédito: ${destinoCredito}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+MI DECISIÓN: ${actionDetails[selectedAction].respuestaRapida}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Detalles adicionales de mi decisión:
+${details}
+
+Atentamente,
+${userInfo.nombre}
+Miembro del Comité de Crédito`;
+
+                    // Construir la URL del mailto
+                    const mailtoUrl = `mailto:contacto@tupakrantina.com?cc=gerencia@tupakrantina.com&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                    
+                    // Abrir la aplicación de correo
+                    window.location.href = mailtoUrl;
+                    
+                    // Mostrar el modal de confirmación de envío
+                    const confirmSendModal = document.createElement('div');
+                    confirmSendModal.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50';
+                    confirmSendModal.innerHTML = `
+                        <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-6 text-center">
+                            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
+                                <svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-xl font-bold text-gray-800 mt-4">Confirmar Envío</h3>
+                            <p class="text-gray-600 mt-2 mb-6">¿El correo se ha enviado correctamente?</p>
+                            <div class="flex space-x-4">
+                                <button class="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-all" id="resend-email-btn">
+                                    Reenviar
+                                </button>
+                                <button class="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-all" id="confirm-sent-btn">
+                                    Enviado
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(confirmSendModal);
+
+                    // Manejar el botón de reenviar
+                    document.getElementById('resend-email-btn').addEventListener('click', () => {
+                        // Solo volver a abrir el cliente de correo con la misma URL
+                        window.location.href = mailtoUrl;
+                        // No removemos el modal, solo lo ocultamos temporalmente mientras se abre el cliente de correo
+                        confirmSendModal.style.display = 'none';
+                        // Volvemos a mostrar el modal después de un breve momento
+                        setTimeout(() => {
+                            confirmSendModal.style.display = 'flex';
+                        }, 1000);
+                    });
+
+                    // Manejar el botón de confirmar envío
+                    document.getElementById('confirm-sent-btn').addEventListener('click', () => {
+                        document.body.removeChild(confirmSendModal);
+                        showEmailStatusModal(true, '¡El correo se ha enviado correctamente! Gracias por tu tiempo.');
+                        // Actualizar la interfaz
+                        hideDetailsSection();
+                        requestCard.classList.add('hidden-scale');
+                    });
+
+                    // Actualizar la interfaz temporalmente
+                    hideDetailsSection();
+                } catch (error) {
+                    // console.error('Error al procesar la decisión:', error);
+                    showEmailStatusModal(false, 'Hubo un error al enviar el correo. ¿Deseas intentar nuevamente?');
+                }
+            });
+
+            // Evento para editar los detalles
+            editDetailsBtn.addEventListener('click', () => {
+                detailsConfirmationModal.classList.add('hidden');
+                detailsTextarea.focus();
+            });
+
+            // Evento para reintentar el envío
+            retryEmailBtn.addEventListener('click', () => {
+                emailStatusModal.classList.add('hidden');
+                confirmDetailsBtn.click(); // Reintentar el proceso
+            });
+
+            // Evento para finalizar el proceso
+            finishProcessBtn.addEventListener('click', () => {
+                isProcessFinished = true;
+                emailStatusModal.classList.add('hidden');
+                updateConfirmationMessage(selectedAction);
+                confirmationMessage.classList.remove('hidden-scale');
+                confirmationMessage.classList.add('visible-scale');
+                
+                // Guardar en localStorage que este crédito ya fue respondido
+                const creditId = new URLSearchParams(window.location.search).get('idcomite');
+                if (creditId) {
+                    localStorage.setItem(`credit_${creditId}_answered`, 'true');
+                }
+            });
+
+            // Función para verificar si el crédito ya fue respondido
+            const checkIfCreditAnswered = () => {
+                const creditId = new URLSearchParams(window.location.search).get('idcomite');
+                if (creditId && localStorage.getItem(`credit_${creditId}_answered`)) {
+                    const alreadyAnsweredModal = document.createElement('div');
+                    alreadyAnsweredModal.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50';
+                    alreadyAnsweredModal.innerHTML = `
+                        <div class="bg-white rounded-xl shadow-lg w-full max-w-sm p-6 text-center">
+                            <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100">
+                                <svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <h3 class="text-xl font-bold text-gray-800 mt-4">Respuesta Registrada</h3>
+                            <p class="text-gray-600 mt-2 mb-6">Agradecemos tu entusiasmo, sin embargo, ya has registrado tu respuesta para este crédito anteriormente.</p>
+                            <button class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-all" onclick="window.close()">
+                                Entendido
+                            </button>
+                        </div>
+                    `;
+                    document.body.appendChild(alreadyAnsweredModal);
+                    
+                    // Ocultar el contenido principal
+                    document.querySelector('.bg-gray-100').style.display = 'none';
+                    return true;
+                }
+                return false;
+            };
+
+            // Verificar al cargar la página si el crédito ya fue respondido
+            if (checkIfCreditAnswered()) {
+                return; // Detener la ejecución si ya fue respondido
+            }
+        });
+    </script>
+</body>
+</html>
+
