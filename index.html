@@ -703,17 +703,17 @@
                     case 'approve':
                         iconHtml = `<div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100"><svg class="h-6 w-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>`;
                         title = 'Solicitud Aprobada';
-                        text = 'La aprobación ha sido registrada y notificada.';
+                        text = 'La aprobación ha sido registrada y notificada. ¡Gracias por tu valiosa participación!';
                         break;
                     case 'deny':
                         iconHtml = `<div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100"><svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></div>`;
                         title = 'Solicitud Negada';
-                        text = 'La negación ha sido registrada correctamente.';
+                        text = 'La negación ha sido registrada correctamente. ¡Gracias por tu valiosa participación!';
                         break;
                     case 'review':
                         iconHtml = `<div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-100"><svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg></div>`;
                         title = 'Enviado a Revisión';
-                        text = 'La solicitud se ha marcado para una revisión adicional.';
+                        text = 'La solicitud se ha marcado para una revisión adicional. ¡Gracias por tu valiosa participación!';
                         break;
                 }
                 confirmationIconContainer.innerHTML = iconHtml;
@@ -844,6 +844,10 @@ Miembro del Comité de Crédito`;
             const retryEmailBtn = document.getElementById('retry-email-btn');
             const finishProcessBtn = document.getElementById('finish-process-btn');
 
+            // Variable para almacenar el último cuerpo del correo
+            let lastEmailBody = '';
+            let resendAttempts = 0; // Contador de intentos de reenvío
+
             // Función para mostrar el modal de confirmación de detalles
             const showDetailsConfirmationModal = (action, details) => {
                 modalDecision.textContent = actionDetails[action].respuestaRapida;
@@ -961,13 +965,146 @@ Atentamente,
 ${userInfo.nombre}
 Miembro del Comité de Crédito`;
 
+                    // Almacenar el cuerpo del correo para copiarlo si es necesario
+                    lastEmailBody = body;
+                    const lastEmailSubject = subject; // Guardar también el asunto
+
                     // Construir la URL del mailto
                     const mailtoUrl = `mailto:contacto@tupakrantina.com?cc=gerencia@tupakrantina.com&subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
                     
                     // Abrir la aplicación de correo
                     window.location.href = mailtoUrl;
                     
-                    // Mostrar el modal de confirmación de envío
+                    // Función para mostrar el modal de fallback para copiar el mensaje
+                    const showFallbackCopyModal = () => {
+                        const fallbackModal = document.createElement('div');
+                        fallbackModal.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4';
+                        fallbackModal.innerHTML = `
+                            <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
+                                <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-orange-100">
+                                    <svg class="h-6 w-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                    </svg>
+                                </div>
+                                <h3 class="text-xl font-bold text-gray-800 mt-4 text-center">Envío Manual Requerido</h3>
+                                <p class="text-gray-600 mt-2 mb-4 text-sm text-center">
+                                    Después de varios intentos, por favor copia el mensaje a continuación y envíalo manualmente a:
+                                </p>
+                                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                                    <p class="text-blue-900 font-bold text-center text-lg">gerencia@tupakrantina.com</p>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="block text-sm font-semibold text-gray-700 mb-1">Asunto:</label>
+                                    <input type="text" id="fallback-subject-input" class="w-full p-2 border border-gray-300 rounded-lg text-sm" value="${lastEmailSubject}" readonly>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="block text-sm font-semibold text-gray-700 mb-1">Mensaje:</label>
+                                    <textarea id="fallback-message-textarea" class="w-full p-3 border border-gray-300 rounded-lg text-sm font-mono" rows="8" readonly>${lastEmailBody}</textarea>
+                                </div>
+                                <div class="flex gap-3">
+                                    <button id="copy-fallback-message-btn" class="flex-1 bg-[#015cd0] hover:bg-[#004ab3] text-white font-bold py-3 px-4 rounded-lg transition-all">
+                                        Copiar Todo
+                                    </button>
+                                    <button id="finish-fallback-btn" class="flex-1 bg-[#e48410] hover:bg-[#d0760e] text-white font-bold py-3 px-4 rounded-lg transition-all">
+                                        Finalizar
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        document.body.appendChild(fallbackModal);
+
+                        // Evento para copiar el mensaje
+                        document.getElementById('copy-fallback-message-btn').addEventListener('click', () => {
+                            const subject = document.getElementById('fallback-subject-input').value;
+                            const body = document.getElementById('fallback-message-textarea').value;
+                            const fullText = `ASUNTO:\n${subject}\n\nMENSAJE:\n${body}`;
+                            
+                            // Intentar usar la API moderna del portapapeles
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                                navigator.clipboard.writeText(fullText).then(() => {
+                                    const btn = document.getElementById('copy-fallback-message-btn');
+                                    const originalText = btn.textContent;
+                                    btn.textContent = '¡Copiado!';
+                                    btn.classList.remove('bg-[#015cd0]', 'hover:bg-[#004ab3]');
+                                    btn.classList.add('bg-green-500', 'hover:bg-green-600');
+                                    setTimeout(() => {
+                                        btn.textContent = originalText;
+                                        btn.classList.remove('bg-green-500', 'hover:bg-green-600');
+                                        btn.classList.add('bg-[#015cd0]', 'hover:bg-[#004ab3]');
+                                    }, 2000);
+                                }).catch(err => {
+                                    // Fallback al método antiguo
+                                    const textarea = document.createElement('textarea');
+                                    textarea.value = fullText;
+                                    textarea.style.position = 'fixed';
+                                    textarea.style.opacity = '0';
+                                    document.body.appendChild(textarea);
+                                    textarea.select();
+                                    try {
+                                        document.execCommand('copy');
+                                        document.body.removeChild(textarea);
+                                        const btn = document.getElementById('copy-fallback-message-btn');
+                                        const originalText = btn.textContent;
+                                        btn.textContent = '¡Copiado!';
+                                        btn.classList.remove('bg-[#015cd0]', 'hover:bg-[#004ab3]');
+                                        btn.classList.add('bg-green-500', 'hover:bg-green-600');
+                                        setTimeout(() => {
+                                            btn.textContent = originalText;
+                                            btn.classList.remove('bg-green-500', 'hover:bg-green-600');
+                                            btn.classList.add('bg-[#015cd0]', 'hover:bg-[#004ab3]');
+                                        }, 2000);
+                                    } catch (err2) {
+                                        document.body.removeChild(textarea);
+                                        alert('Por favor, selecciona y copia el texto manualmente (Ctrl+C)');
+                                    }
+                                });
+                            } else {
+                                // Método antiguo para navegadores que no soportan clipboard API
+                                const textarea = document.createElement('textarea');
+                                textarea.value = fullText;
+                                textarea.style.position = 'fixed';
+                                textarea.style.opacity = '0';
+                                document.body.appendChild(textarea);
+                                textarea.select();
+                                try {
+                                    document.execCommand('copy');
+                                    document.body.removeChild(textarea);
+                                    const btn = document.getElementById('copy-fallback-message-btn');
+                                    const originalText = btn.textContent;
+                                    btn.textContent = '¡Copiado!';
+                                    btn.classList.remove('bg-[#015cd0]', 'hover:bg-[#004ab3]');
+                                    btn.classList.add('bg-green-500', 'hover:bg-green-600');
+                                    setTimeout(() => {
+                                        btn.textContent = originalText;
+                                        btn.classList.remove('bg-green-500', 'hover:bg-green-600');
+                                        btn.classList.add('bg-[#015cd0]', 'hover:bg-[#004ab3]');
+                                    }, 2000);
+                                } catch (err) {
+                                    document.body.removeChild(textarea);
+                                    alert('Por favor, selecciona y copia el texto manualmente (Ctrl+C)');
+                                }
+                            }
+                        });
+
+                        // Evento para finalizar
+                        document.getElementById('finish-fallback-btn').addEventListener('click', () => {
+                            document.body.removeChild(fallbackModal);
+                            isProcessFinished = true;
+                            updateConfirmationMessage(selectedAction);
+                            hideDetailsSection();
+                            requestCard.classList.add('hidden-scale');
+                            confirmationMessage.classList.remove('hidden-scale');
+                            confirmationMessage.classList.add('visible-scale');
+                            
+                            // Guardar en localStorage que este crédito ya fue respondido
+                            const creditId = new URLSearchParams(window.location.search).get('idcomite');
+                            if (creditId) {
+                                localStorage.setItem(`credit_${creditId}_answered`, 'true');
+                            }
+                        });
+                    };
+                    
+                    // Crear el modal de confirmación de envío
                     const confirmSendModal = document.createElement('div');
                     confirmSendModal.className = 'fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50';
                     confirmSendModal.innerHTML = `
@@ -993,20 +1130,36 @@ Miembro del Comité de Crédito`;
 
                     // Manejar el botón de reenviar
                     document.getElementById('resend-email-btn').addEventListener('click', () => {
-                        // Solo volver a abrir el cliente de correo con la misma URL
-                        window.location.href = mailtoUrl;
-                        // No removemos el modal, solo lo ocultamos temporalmente mientras se abre el cliente de correo
-                        confirmSendModal.style.display = 'none';
-                        // Volvemos a mostrar el modal después de un breve momento
-                        setTimeout(() => {
-                            confirmSendModal.style.display = 'flex';
-                        }, 1000);
+                        resendAttempts++;
+                        if (resendAttempts >= 3) {
+                            // Después de 3 intentos, mostrar modal de fallback para copiar
+                            document.body.removeChild(confirmSendModal);
+                            showFallbackCopyModal();
+                        } else {
+                            // Solo volver a abrir el cliente de correo con la misma URL
+                            window.location.href = mailtoUrl;
+                            // No removemos el modal, solo lo ocultamos temporalmente mientras se abre el cliente de correo
+                            confirmSendModal.style.display = 'none';
+                            // Volvemos a mostrar el modal después de un breve momento
+                            setTimeout(() => {
+                                confirmSendModal.style.display = 'flex';
+                            }, 1000);
+                        }
                     });
 
                     // Manejar el botón de confirmar envío
                     document.getElementById('confirm-sent-btn').addEventListener('click', () => {
                         document.body.removeChild(confirmSendModal);
-                        showEmailStatusModal(true, '¡El correo se ha enviado correctamente! Gracias por tu tiempo.');
+                        resendAttempts = 0; // Resetear contador
+                        isProcessFinished = true;
+                        
+                        // Guardar en localStorage que este crédito ya fue respondido
+                        const creditId = new URLSearchParams(window.location.search).get('idcomite');
+                        if (creditId) {
+                            localStorage.setItem(`credit_${creditId}_answered`, 'true');
+                        }
+                        
+                        showEmailStatusModal(true, '¡Correo enviado exitosamente! Agradecemos tu participación y valioso aporte al comité de crédito.');
                         // Actualizar la interfaz
                         hideDetailsSection();
                         requestCard.classList.add('hidden-scale');
@@ -1029,6 +1182,7 @@ Miembro del Comité de Crédito`;
             // Evento para reintentar el envío
             retryEmailBtn.addEventListener('click', () => {
                 emailStatusModal.classList.add('hidden');
+                resendAttempts = 0; // Resetear contador al reintentar desde el modal de error
                 confirmDetailsBtn.click(); // Reintentar el proceso
             });
 
